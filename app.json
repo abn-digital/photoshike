@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "Photoshike",
+    "slug": "photoshike",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#101922"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.photoshike.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Photoshike needs camera access to overlay silhouettes on your live feed.",
+        "NSPhotoLibraryUsageDescription": "Photoshike saves captured photos to your photo library.",
+        "NSPhotoLibraryAddUsageDescription": "Photoshike saves captured photos to your photo library."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#101922"
+      },
+      "package": "com.photoshike.app",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Photoshike uses your camera to overlay silhouettes on the live feed."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Photoshike saves your captured photos to the gallery.",
+          "savePhotosPermission": "Photoshike saves your captured photos to the gallery."
+        }
+      ]
+    ]
+  }
+}
