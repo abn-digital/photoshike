@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
     previewLabel: {
         position: 'absolute', bottom: 0, left: 0, right: 0,
         paddingHorizontal: 14, paddingVertical: 10,
-        background: 'transparent',
+        backgroundColor: 'transparent',
     },
     previewLabelText: { fontSize: 10, fontWeight: '600', color: Colors.textSecondary, letterSpacing: 0.8 },
     form: { gap: 18 },

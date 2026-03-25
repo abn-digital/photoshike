@@ -90,7 +90,7 @@ export default function TemplatesScreen() {
                             onPress={() => handleSelect(item.id)}
                         >
                             <View style={styles.thumbWrap}>
-                                <TemplateSVG templateId={item.id} size={CARD_SIZE - 24} featureScale={1.0} />
+                                <TemplateSVG templateId={item.id} size={CARD_SIZE - 24} featureWidthScale={1.0} />
                                 {isSelected && (
                                     <View style={styles.checkBadge}>
                                         <MaterialCommunityIcons name="check-circle" size={20} color="#fff" />
