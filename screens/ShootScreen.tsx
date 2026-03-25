@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity,
-    Dimensions, Alert, Platform,
+    Dimensions, Alert, Platform, PanResponder,
 } from 'react-native';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -121,6 +121,71 @@ function StatusBadge({ state, score }: { state: AlignState; score: number }) {
         </View>
     );
 }
+
+/* ─── Draggable Slider ───────────────────────────────────── */
+function DragSlider({
+    value, onValueChange, min, max, disabled, fillColor, thumbColor, trackWidth,
+}: {
+    value: number;
+    onValueChange: (v: number) => void;
+    min: number;
+    max: number;
+    disabled?: boolean;
+    fillColor?: string;
+    thumbColor?: string;
+    trackWidth?: number;
+}) {
+    const tw = trackWidth ?? SW - 40;
+    // When locked, fall back to a muted gray regardless of the intended color.
+    const lockedColor = 'rgba(255,255,255,0.2)';
+    const fColor = disabled ? lockedColor : (fillColor ?? Colors.primary);
+    const tColor = disabled ? 'rgba(255,255,255,0.35)' : (thumbColor ?? Colors.primary);
+    const range = max - min;
+
+    // Keep refs to latest props so the PanResponder closure is never stale.
+    const valueRef = useRef(value);
+    const onValueChangeRef = useRef(onValueChange);
+    const disabledRef = useRef(disabled);
+    useEffect(() => { valueRef.current = value; }, [value]);
+    useEffect(() => { onValueChangeRef.current = onValueChange; }, [onValueChange]);
+    useEffect(() => { disabledRef.current = disabled; }, [disabled]);
+
+    // Value at the moment the user touches down — delta is computed from here.
+    const startValue = useRef(value);
+
+    const panResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponder: () => true,
+            // On touch-down: just snapshot the current value. Do NOT jump to
+            // locationX — locationX can be relative to a child view (fill/thumb)
+            // and would cause the slider to snap to 0 or to the wrong position.
+            onPanResponderGrant: () => {
+                if (disabledRef.current) return;
+                startValue.current = valueRef.current;
+            },
+            // On drag: compute new value from how far the finger has moved
+            // relative to the touch-down point. gestureState.dx is always the
+            // cumulative delta from the original touch, so it's rock-stable.
+            onPanResponderMove: (_e, gestureState) => {
+                if (disabledRef.current) return;
+                const delta = (gestureState.dx / tw) * range;
+                const raw = startValue.current + delta;
+                onValueChangeRef.current(parseFloat(Math.max(min, Math.min(max, raw)).toFixed(2)));
+            },
+        })
+    ).current;
+
+    const pct = ((value - min) / range) * 100;
+
+    return (
+        <View style={styles.sliderTrack} {...panResponder.panHandlers}>
+            <View style={[styles.sliderFill, { width: `${pct}%`, backgroundColor: fColor }]} />
+            <View style={[styles.sliderThumb, { left: `${pct}%`, backgroundColor: tColor }]} />
+        </View>
+    );
+}
+
 
 /* ═══ Main Screen ═══════════════════════════════════════════ */
 export default function ShootScreen() {
@@ -317,9 +382,7 @@ export default function ShootScreen() {
                     <Text style={styles.headerTitle}>Camera Feed</Text>
                     <Text style={styles.headerSub}>4:5 ASPECT RATIO</Text>
                 </View>
-                <TouchableOpacity onPress={() => navigation.navigate('Main' as any)} style={styles.headerBtn}>
-                    <MaterialCommunityIcons name="cog-outline" size={22} color={Colors.textPrimary} />
-                </TouchableOpacity>
+                <View style={{ width: 42 }} />
             </View>
 
             {/* Camera Viewport */}
@@ -395,8 +458,8 @@ export default function ShootScreen() {
                 {/* Level indicator */}
                 <LevelIndicator roll={roll} isLevel={isLevel} />
 
-                {/* Status badge */}
-                {selectedTemplate && (
+                {/* Status badge — only shown when phone needs levelling */}
+                {alignState === 'idle' && (
                     <StatusBadge state={alignState} score={alignScore} />
                 )}
 
@@ -448,7 +511,7 @@ export default function ShootScreen() {
             {/* Bottom Controls */}
             <View style={[styles.bottomControls, { paddingBottom: insets.bottom + 8 }]}>
                 {/* Opacity Slider */}
-                <View style={[styles.sliderSection, !selectedTemplate && styles.dimmed]}>
+                <View style={[styles.sliderSection, !selectedTemplate && styles.dimmed, { marginBottom: 12 }]}>
                     <View style={styles.sliderHeader}>
                         <View style={styles.sliderLabelRow}>
                             <MaterialCommunityIcons name="layers" size={14} color={Colors.primary} />
@@ -458,19 +521,11 @@ export default function ShootScreen() {
                             <Text style={styles.sliderValueText}>{Math.round(overlayOpacity * 100)}%</Text>
                         </View>
                     </View>
-                    <View style={styles.sliderTrack}>
-                        <View style={[styles.sliderFill, { width: `${overlayOpacity * 100}%` }]} />
-                        <View style={[styles.sliderThumb, { left: `${overlayOpacity * 100}%` }]} />
-                        <TouchableOpacity
-                            style={StyleSheet.absoluteFill}
-                            activeOpacity={1}
-                            onPress={(e) => {
-                                if (overlayLocked) return;
-                                const newVal = Math.max(0, Math.min(1, e.nativeEvent.locationX / (SW - 40)));
-                                setOverlayOpacity(parseFloat(newVal.toFixed(2)));
-                            }}
-                        />
-                    </View>
+                    <DragSlider
+                        value={overlayOpacity} min={0} max={1}
+                        disabled={overlayLocked}
+                        onValueChange={setOverlayOpacity}
+                    />
                 </View>
 
                 {/* Granular Alignment Sliders */}
@@ -488,22 +543,13 @@ export default function ShootScreen() {
                                         <Text style={styles.sliderValueText}>{Math.round(wheelbaseScale * 100)}%</Text>
                                     </View>
                                 </View>
-                                <View style={styles.sliderTrack}>
-                                    <View style={[styles.sliderFill, { width: `${((wheelbaseScale - 0.5) / 1.0) * 100}%` }]} />
-                                    <View style={[styles.sliderThumb, { left: `${((wheelbaseScale - 0.5) / 1.0) * 100}%` }]} />
-                                    <TouchableOpacity
-                                        style={StyleSheet.absoluteFill}
-                                        activeOpacity={1}
-                                        onPress={(e) => {
-                                            if (overlayLocked) return;
-                                            const newVal = 0.5 + (e.nativeEvent.locationX / (SW - 40)) * 1.0;
-                                            setWheelbaseScale(parseFloat(Math.max(0.5, Math.min(1.5, newVal)).toFixed(2)));
-                                        }}
-                                    />
-                                </View>
+                                <DragSlider
+                                    value={wheelbaseScale} min={0.5} max={1.5}
+                                    disabled={overlayLocked}
+                                    onValueChange={setWheelbaseScale}
+                                />
                             </View>
                         )}
-
 
                         {/* Vertical Offset */}
                         <View style={styles.sliderSection}>
@@ -516,28 +562,13 @@ export default function ShootScreen() {
                                     <Text style={styles.sliderValueText}>{Math.round(verticalOffset * 100)}%</Text>
                                 </View>
                             </View>
-                            <View style={styles.sliderTrack}>
-                                <View style={[styles.sliderFill, { 
-                                    width: `${((verticalOffset + 0.1) / 0.2) * 100}%`,
-                                    backgroundColor: Colors.warning 
-                                }]} />
-                                <View style={[
-                                    styles.sliderThumb, 
-                                    { 
-                                        left: `${((verticalOffset + 0.1) / 0.2) * 100}%`, 
-                                        backgroundColor: Colors.warning 
-                                    }
-                                ]} />
-                                <TouchableOpacity
-                                    style={StyleSheet.absoluteFill}
-                                    activeOpacity={1}
-                                    onPress={(e) => {
-                                        if (overlayLocked) return;
-                                        const newVal = -0.1 + (e.nativeEvent.locationX / (SW - 40)) * 0.2;
-                                        setVerticalOffset(parseFloat(Math.max(-0.1, Math.min(0.1, newVal)).toFixed(2)));
-                                    }}
-                                />
-                            </View>
+                            <DragSlider
+                                value={verticalOffset} min={-0.1} max={0.1}
+                                disabled={overlayLocked}
+                                fillColor={Colors.warning}
+                                thumbColor={Colors.warning}
+                                onValueChange={setVerticalOffset}
+                            />
                         </View>
                     </View>
                 )}

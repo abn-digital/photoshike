@@ -109,7 +109,7 @@ export function SideProfileSVG({
         <Svg width={size} height={size} viewBox="0 0 200 200" fill="none">
             <Path 
                 d={`M15 110 Q18 95 28 90 L60 80 Q80 60 100 56 Q118 52 138 56 L162 68 Q175 78 180 100`} 
-                stroke={s} strokeWidth="1" fill="none" opacity={opacity * 0.25} 
+                stroke={s} strokeWidth="2.5" fill="none" opacity={opacity * 0.6} 
                 transform={`translate(0, ${yOff})`}
             />
             <Circle cx={fx} cy={143 + yOff} r="18" stroke={s} strokeWidth="3" fill="none" opacity={opacity} />
@@ -129,7 +129,7 @@ export function FrontViewSVG({
 
     return (
         <Svg width={size} height={size} viewBox="0 0 200 200" fill="none">
-            <Path d="M40 140 L40 100 Q42 80 60 70 L80 60 Q100 58 120 60 L140 70 Q158 80 160 100 L160 140" stroke={s} strokeWidth="1" fill="none" opacity={opacity * 0.25} transform={`translate(0, ${yOff})`} />
+            <Path d="M40 140 L40 100 Q42 80 60 70 L80 60 Q100 58 120 60 L140 70 Q158 80 160 100 L160 140" stroke={s} strokeWidth="2.5" fill="none" opacity={opacity * 0.6} transform={`translate(0, ${yOff})`} />
             <Rect x={centerX - dist - 15} y={85 + yOff} width="30" height="15" rx="4" stroke={s} strokeWidth="3" fill="none" opacity={opacity} />
             <Rect x={centerX + dist - 15} y={85 + yOff} width="30" height="15" rx="4" stroke={s} strokeWidth="3" fill="none" opacity={opacity} />
         </Svg>
@@ -147,7 +147,7 @@ export function RearViewSVG({
 
     return (
         <Svg width={size} height={size} viewBox="0 0 200 200" fill="none">
-            <Path d="M40 140 L40 100 Q42 80 60 70 L80 60 Q100 58 120 60 L140 70 Q158 80 160 100 L160 140" stroke={s} strokeWidth="1" fill="none" opacity={opacity * 0.25} transform={`translate(0, ${yOff})`} />
+            <Path d="M40 140 L40 100 Q42 80 60 70 L80 60 Q100 58 120 60 L140 70 Q158 80 160 100 L160 140" stroke={s} strokeWidth="2.5" fill="none" opacity={opacity * 0.6} transform={`translate(0, ${yOff})`} />
             <Rect x={centerX - dist - 18} y={90 + yOff} width="36" height="12" rx="3" stroke={s} strokeWidth="3" fill="none" opacity={opacity} />
             <Rect x={centerX + dist - 18} y={90 + yOff} width="36" height="12" rx="3" stroke={s} strokeWidth="3" fill="none" opacity={opacity} />
         </Svg>
@@ -167,7 +167,7 @@ export function DiagonalSVG({
 
     return (
         <Svg width={size} height={size} viewBox="0 0 200 200" fill="none">
-            <Path d="M30 130 L30 105 Q32 85 55 72 L80 58 Q100 52 145 56 Q162 62 178 105 L178 130" stroke={s} strokeWidth="1" fill="none" opacity={opacity * 0.25} transform={`translate(0, ${yOff})`} />
+            <Path d="M30 130 L30 105 Q32 85 55 72 L80 58 Q100 52 145 56 Q162 62 178 105 L178 130" stroke={s} strokeWidth="2.5" fill="none" opacity={opacity * 0.6} transform={`translate(0, ${yOff})`} />
             <Circle cx={centerX - fWheelDist} cy={138 + yOff} r="12" stroke={s} strokeWidth="3" fill="none" opacity={opacity} />
             <Circle cx={centerX + rWheelDist} cy={138 + yOff} r="12" stroke={s} strokeWidth="3" fill="none" opacity={opacity} />
             <Rect x={lightX - 15} y={90 + yOff} width="30" height="15" rx="4" stroke={s} strokeWidth="2.5" fill="none" opacity={opacity} />
