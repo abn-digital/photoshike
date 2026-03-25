@@ -218,11 +218,7 @@ export default function ShootScreen() {
         ? getAnchorsForTemplate(selectedTemplate.id, wheelbaseScale, featureWidthScale, verticalOffset) 
         : [];
 
-    // 4:5 letterbox calculation
-    const viewportWidth = SW;
-    const idealHeight = viewportWidth * (5 / 4);
-    const viewportHeight = SH - insets.top - insets.bottom - 72 - 180;
-    const letterbarH = Math.max(0, (viewportHeight - Math.min(idealHeight, viewportHeight)) / 2);
+
 
     // Request camera permission
     const requestCameraIfNeeded = useCallback(async () => {
@@ -266,55 +262,45 @@ export default function ShootScreen() {
         };
     }, []);
 
-    /* ── Run alignment check ── */
-    const runAlignmentCheck = useCallback(async () => {
-        if (!cameraRef.current || !selectedTemplate) return;
-
-        setAlignState('scanning');
+    /* ── Unified capture: check alignment then shoot ── */
+    const handleCapture = async () => {
+        if (!cameraRef.current || isCapturing || alignState === 'scanning') return;
+        setIsCapturing(true);
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
         try {
-            // 1. Capture snapshot
-            const photo = await cameraRef.current.takePictureAsync({ quality: 0.3 });
-            if (!photo?.uri) {
-                setAlignState('idle');
+            // No template → just shoot directly, no alignment needed
+            if (!selectedTemplate) {
+                const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
+                if (photo?.uri) {
+                    setCapturedPhotoUri(photo.uri);
+                    navigation.navigate('Validate');
+                }
                 return;
             }
 
-            // 2. Normalize and Crop to 4:5 aspect ratio
-            // Sensor is usually 3:4 (0.75). Viewport is 4:5 (0.8).
-            const sensorRatio = photo.width / photo.height;
-            const targetRatio = 0.8; // 4:5
-            
-            let crop = { originX: 0, originY: 0, width: photo.width, height: photo.height };
+            // 1. Run alignment check on a fast low-quality snapshot
+            setAlignState('scanning');
+
+            const snap = await cameraRef.current.takePictureAsync({ quality: 0.3 });
+            if (!snap?.uri) { setAlignState('idle'); return; }
+
+            // Crop snapshot to 4:5
+            const sensorRatio = snap.width / snap.height;
+            const targetRatio = 0.8;
+            let crop = { originX: 0, originY: 0, width: snap.width, height: snap.height };
             if (sensorRatio > targetRatio) {
-                // Sensor is wider (e.g. 16:9) -> crop sides
-                const targetWidth = photo.height * targetRatio;
-                crop.originX = (photo.width - targetWidth) / 2;
-                crop.width = targetWidth;
+                const tw = snap.height * targetRatio;
+                crop.originX = (snap.width - tw) / 2;
+                crop.width = tw;
             } else {
-                // Sensor is narrower (e.g. 3:4) -> crop top/bottom
-                const targetHeight = photo.width / targetRatio;
-                crop.originY = (photo.height - targetHeight) / 2;
-                crop.height = targetHeight;
+                const th = snap.width / targetRatio;
+                crop.originY = (snap.height - th) / 2;
+                crop.height = th;
             }
+            const resized = await manipulateAsync(snap.uri, [{ crop }, { resize: { width: 400 } }], { format: SaveFormat.JPEG });
 
-            const resized = await manipulateAsync(
-                photo.uri,
-                [
-                    { crop }, 
-                    { resize: { width: 400 } }
-                ],
-                { format: SaveFormat.JPEG }
-            );
-
-            // 3. Crop each anchor region and measure visual complexity
-            const result = await analyzeAlignmentByCrops(
-                resized.uri,
-                resized.width,
-                resized.height,
-                anchors,
-            );
-
+            const result = await analyzeAlignmentByCrops(resized.uri, resized.width, resized.height, anchors);
             setAlignScore(result.score);
 
             console.log("─── ALIGNMENT CHECK ───");
@@ -330,40 +316,28 @@ export default function ShootScreen() {
             console.log("──────────────────────");
 
             if (result.score > 0.70) {
+                // 2a. Passed → take HQ photo immediately and navigate
                 setAlignState('approved');
                 await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+                const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
+                if (photo?.uri) {
+                    setCapturedPhotoUri(photo.uri);
+                    navigation.navigate('Validate');
+                }
             } else {
+                // 2b. Failed → red onion skin, reset after 4s so user can retry
                 setAlignState('rejected');
                 await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-            }
 
-            // Reset after 4 seconds
-            resetTimerRef.current = setTimeout(() => {
-                resetTimerRef.current = null;
-                setAlignState('idle');
-            }, 4000);
-
-        } catch (e) {
-            console.warn('Alignment check error:', e);
-            setAlignState('idle');
-        }
-    }, [selectedTemplate, anchors]);
-
-    /* ── Manual capture (locked unless approved or no template) ── */
-    const canCapture = !selectedTemplate || alignState === 'approved';
-
-    const handleCapture = async () => {
-        if (!cameraRef.current || isCapturing || !canCapture) return;
-        setIsCapturing(true);
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        try {
-            const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
-            if (photo?.uri) {
-                setCapturedPhotoUri(photo.uri);
-                navigation.navigate('Validate');
+                resetTimerRef.current = setTimeout(() => {
+                    resetTimerRef.current = null;
+                    setAlignState('idle');
+                }, 4000);
             }
         } catch (e) {
             console.warn('Capture error:', e);
+            setAlignState('idle');
         } finally {
             setIsCapturing(false);
         }
@@ -371,7 +345,7 @@ export default function ShootScreen() {
 
     // Visual colors
     const overlayColor = stateColor(alignState);
-    const isReady = alignState === 'approved';
+    const isScanning = alignState === 'scanning';
 
     return (
         <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -403,13 +377,7 @@ export default function ShootScreen() {
                     </View>
                 )}
 
-                {/* Letterbox bars */}
-                {letterbarH > 0 && (
-                    <>
-                        <View style={[styles.letterbar, { height: letterbarH, top: 0 }]} />
-                        <View style={[styles.letterbar, { height: letterbarH, bottom: 0 }]} />
-                    </>
-                )}
+
 
                 {/* Onion skin overlay */}
                 {selectedTemplate && (
@@ -458,8 +426,8 @@ export default function ShootScreen() {
                 {/* Level indicator */}
                 <LevelIndicator roll={roll} isLevel={isLevel} />
 
-                {/* Status badge — only shown when phone needs levelling */}
-                {alignState === 'idle' && (
+                {/* Status badge — only shown when template selected and phone needs levelling */}
+                {selectedTemplate && alignState === 'idle' && (
                     <StatusBadge state={alignState} score={alignScore} />
                 )}
 
@@ -484,17 +452,6 @@ export default function ShootScreen() {
                         <MaterialCommunityIcons name={overlayLocked ? 'lock' : 'lock-open-outline'} size={20} color={overlayLocked ? '#fff' : Colors.textSecondary} />
                     </TouchableOpacity>
                 </View>
-
-                {/* Manual Alignment Scan Button (only when level) */}
-                {isLevel && selectedTemplate && (alignState === 'ready' || alignState === 'rejected') && (
-                    <TouchableOpacity 
-                        style={styles.scanBtn} 
-                        onPress={runAlignmentCheck}
-                    >
-                        <MaterialCommunityIcons name="magnify-scan" size={24} color="#fff" />
-                        <Text style={styles.scanBtnText}>CHECK ALIGNMENT</Text>
-                    </TouchableOpacity>
-                )}
 
                 {/* Choose template hint */}
                 {!selectedTemplate && (
@@ -586,22 +543,23 @@ export default function ShootScreen() {
                         style={styles.shutterWrap}
                         onPress={handleCapture}
                         activeOpacity={0.85}
-                        disabled={isCapturing || !canCapture}
+                        disabled={isCapturing || isScanning || !selectedTemplate}
                     >
                         <View style={[
                             styles.shutterOuter,
-                            isReady && { borderColor: 'rgba(34,197,94,0.6)', borderWidth: 3 },
+                            isScanning && { borderColor: 'rgba(59,130,246,0.6)', borderWidth: 3 },
                             alignState === 'ready' && { borderColor: 'rgba(234,179,8,0.5)' },
                             alignState === 'rejected' && { borderColor: 'rgba(239,68,68,0.5)' },
                         ]} />
                         <View style={[
                             styles.shutterInner,
                             isCapturing && { backgroundColor: Colors.primary },
-                            isReady && { backgroundColor: '#22C55E' },
+                            isScanning && { backgroundColor: '#3B82F6' },
                             alignState === 'ready' && { backgroundColor: '#EAB308' },
                             alignState === 'rejected' && { backgroundColor: '#EF4444' },
                         ]} />
                     </TouchableOpacity>
+
 
                     <TouchableOpacity
                         style={styles.ratioBtn}
@@ -799,10 +757,7 @@ const styles = StyleSheet.create({
         paddingVertical: 10, borderRadius: Radii.full,
     },
     permBtnText: { color: Colors.primary, fontWeight: '600', fontSize: Typography.sm },
-    letterbar: {
-        position: 'absolute', left: 0, right: 0,
-        backgroundColor: 'rgba(0,0,0,0.55)', zIndex: 2,
-    },
+
     refLabel: {
         position: 'absolute', top: 36, fontSize: 9, fontWeight: '700',
         backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 4, borderRadius: 2,
