@@ -94,16 +94,16 @@ function LevelIndicator({ roll, isLevel }: { roll: number; isLevel: boolean }) {
 }
 
 /* ─── Status Badge ───────────────────────────────────────── */
-function StatusBadge({ state, score }: { state: AlignState; score: number }) {
+function StatusBadge({ state, score, hint }: { state: AlignState; score: number; hint?: string }) {
     const color = stateColor(state);
     const pct = Math.round(score * 100);
 
     const configs: Record<AlignState, { icon: string; text: string }> = {
-        idle: { icon: 'phone-rotate-landscape', text: 'LEVEL YOUR PHONE' },
-        ready: { icon: 'camera', text: 'HOLD STEADY…' },
-        scanning: { icon: 'magnify-scan', text: 'SCANNING…' },
-        approved: { icon: 'check-circle', text: `ALIGNED ${pct}% · READY` },
-        rejected: { icon: 'close-circle', text: `MISALIGNED ${pct}% · RETAKE` },
+        idle:     { icon: 'phone-rotate-landscape', text: 'LEVEL YOUR PHONE' },
+        ready:    { icon: 'camera',                 text: 'HOLD STEADY…' },
+        scanning: { icon: 'magnify-scan',           text: 'SCANNING…' },
+        approved: { icon: 'check-circle',           text: `ALIGNED ${pct}% · READY` },
+        rejected: { icon: 'close-circle',           text: 'MISALIGNED · RETAKE' },
     };
 
     const { icon, text } = configs[state];
@@ -117,7 +117,12 @@ function StatusBadge({ state, score }: { state: AlignState; score: number }) {
             },
         ]}>
             <MaterialCommunityIcons name={icon as any} size={14} color={color} />
-            <Text style={[styles.statusBadgeText, { color }]}>{text}</Text>
+            <View>
+                <Text style={[styles.statusBadgeText, { color }]}>{text}</Text>
+                {hint ? (
+                    <Text style={[styles.statusBadgeHint, { color }]}>{hint}</Text>
+                ) : null}
+            </View>
         </View>
     );
 }
@@ -197,6 +202,7 @@ export default function ShootScreen() {
     const [isCapturing, setIsCapturing] = useState(false);
     const [alignState, setAlignState] = useState<AlignState>('idle');
     const [alignScore, setAlignScore] = useState(0);
+    const [rejectionHint, setRejectionHint] = useState<string | undefined>(undefined);
     const levelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -263,19 +269,33 @@ export default function ShootScreen() {
     }, []);
 
     /* ── Unified capture: check alignment then shoot ── */
+
+    /** Translate raw reason codes into one actionable user-facing hint. */
+    function reasonToHint(reasons: string[]): string {
+        if (reasons.includes('[ASYMMETRIC]'))        return 'Center the car in frame';
+        if (reasons.includes('[EXTREME_TEXTURE]'))   return 'Background too busy — find a cleaner spot';
+        if (reasons.some(r => r.startsWith('[LOW_DETAIL_')))   return 'Car feature not visible — get closer';
+        if (reasons.some(r => r.startsWith('[LOW_BG_RATIO_'))) return 'Background too similar to car';
+        if (reasons.some(r => r.startsWith('[LOW_BODY_RATIO_'))) return 'Car features unclear — try better lighting';
+        return 'Reposition and try again';
+    }
+
     const handleCapture = async () => {
         if (!cameraRef.current || isCapturing || alignState === 'scanning') return;
         setIsCapturing(true);
+        setRejectionHint(undefined);
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
         try {
             // No template → just shoot directly, no alignment needed
             if (!selectedTemplate) {
                 const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
-                if (photo?.uri) {
-                    setCapturedPhotoUri(photo.uri);
-                    navigation.navigate('Validate');
+                if (!photo?.uri) {
+                    Alert.alert('Camera Error', 'Failed to capture photo. Please try again.');
+                    return;
                 }
+                setCapturedPhotoUri(photo.uri);
+                navigation.navigate('Validate');
                 return;
             }
 
@@ -283,7 +303,12 @@ export default function ShootScreen() {
             setAlignState('scanning');
 
             const snap = await cameraRef.current.takePictureAsync({ quality: 0.3 });
-            if (!snap?.uri) { setAlignState('idle'); return; }
+            if (!snap?.uri) {
+                setRejectionHint('Camera not ready — try again');
+                setAlignState('rejected');
+                resetTimerRef.current = setTimeout(() => { setAlignState('idle'); }, 3000);
+                return;
+            }
 
             // Crop snapshot to 4:5
             const sensorRatio = snap.width / snap.height;
@@ -315,29 +340,40 @@ export default function ShootScreen() {
             if (result.error) console.log(`Error: ${result.error}`);
             console.log("──────────────────────");
 
-            if (result.score > 0.70) {
+            if (result.score > 0.80) {
                 // 2a. Passed → take HQ photo immediately and navigate
                 setAlignState('approved');
                 await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
                 const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
-                if (photo?.uri) {
-                    setCapturedPhotoUri(photo.uri);
-                    navigation.navigate('Validate');
+                if (!photo?.uri) {
+                    Alert.alert('Camera Error', 'Alignment passed but photo capture failed. Please try again.');
+                    setAlignState('idle');
+                    return;
                 }
+                setCapturedPhotoUri(photo.uri);
+                navigation.navigate('Validate');
             } else {
-                // 2b. Failed → red onion skin, reset after 4s so user can retry
+                // 2b. Failed → red badge with hint, reset after 4s
+                const hint = reasonToHint(result.reasons);
+                setRejectionHint(hint);
                 setAlignState('rejected');
                 await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
 
                 resetTimerRef.current = setTimeout(() => {
                     resetTimerRef.current = null;
+                    setRejectionHint(undefined);
                     setAlignState('idle');
                 }, 4000);
             }
-        } catch (e) {
+        } catch (e: any) {
             console.warn('Capture error:', e);
             setAlignState('idle');
+            Alert.alert(
+                'Camera Error',
+                'Something went wrong while taking the photo. Make sure the camera is ready and try again.',
+                [{ text: 'OK' }]
+            );
         } finally {
             setIsCapturing(false);
         }
@@ -426,9 +462,9 @@ export default function ShootScreen() {
                 {/* Level indicator */}
                 <LevelIndicator roll={roll} isLevel={isLevel} />
 
-                {/* Status badge — only shown when template selected and phone needs levelling */}
-                {selectedTemplate && alignState === 'idle' && (
-                    <StatusBadge state={alignState} score={alignScore} />
+                {/* Status badge — shown on idle (level prompt) and rejected (hint) */}
+                {selectedTemplate && (alignState === 'idle' || alignState === 'rejected') && (
+                    <StatusBadge state={alignState} score={alignScore} hint={rejectionHint} />
                 )}
 
                 {/* Side controls */}
@@ -685,24 +721,25 @@ async function analyzeAlignmentByCrops(
         const c = complexities[i];
         const type = anchors[i]?.type || 'edge';
         const threshold = profile[type] ?? 800;
-        
-        const ratioNoise = c / (details.sceneNoise || 1);
-        const ratioBody = c / (details.bodyNoise || 1);
-        
-        // SYMMETRY-FIRST BYPASS: If Symmetry > 80%, we allow higher noise floor
-        let reqRatio = 1.35; 
-        if (details.symmetryRatio > 0.80) {
-            reqRatio = 0.9; // Trust the pair even if background is busy
-        } else if (c > 3500) {
-            reqRatio = 1.1;
-        }
 
-        const pass = (c > threshold * 0.4) && (ratioNoise >= reqRatio) && (ratioBody >= reqRatio);
-        
+        const ratioNoise = c / (details.sceneNoise || 1);
+        const ratioBody  = c / (details.bodyNoise  || 1);
+
+        // Anchors must be meaningfully more complex than both the background
+        // noise and the car body. No symmetry bypass — symmetric textures
+        // (floors, walls, grass) would falsely trigger it.
+        let reqRatio = 1.6;
+        if (c > 4000) reqRatio = 1.3; // Very high-complexity patches get slight leniency
+
+        // Also require absolute minimum complexity (55% of feature-specific threshold)
+        const absMinimum = threshold * 0.55;
+
+        const pass = (c > absMinimum) && (ratioNoise >= reqRatio) && (ratioBody >= reqRatio);
+
         details.anchorDetails.push({
             complexity: c,
             threshold,
-            ratio: Math.min(ratioNoise, ratioBody), 
+            ratio: Math.min(ratioNoise, ratioBody),
             reqRatio,
             pass
         });
@@ -710,24 +747,24 @@ async function analyzeAlignmentByCrops(
         if (pass) {
             totalScore += Math.min(1, c / threshold);
         } else {
-            if (c < threshold * 0.4) details.reasons.push(`[LOW_DETAIL_${i}]`);
+            if (c <= absMinimum)          details.reasons.push(`[LOW_DETAIL_${i}]`);
             else if (ratioNoise < reqRatio) details.reasons.push(`[LOW_BG_RATIO_${i}]`);
-            else if (ratioBody < reqRatio) details.reasons.push(`[LOW_BODY_RATIO_${i}]`);
+            else if (ratioBody  < reqRatio) details.reasons.push(`[LOW_BODY_RATIO_${i}]`);
         }
     }
 
     let finalScore = totalScore / (anchors.length || 1);
 
-    // Final Symmetry Penalty
+    // Asymmetry penalty: anchors look nothing alike → framing is off-centre
     if (details.symmetryRatio < 0.6) {
         finalScore *= details.symmetryRatio;
-        details.reasons.push("[ASYMMETRIC]");
+        details.reasons.push('[ASYMMETRIC]');
     }
 
-    // Heavy Noise Penalty (Only if both symmetry is low AND noise is extreme)
-    if (details.sceneNoise > 5500 && details.symmetryRatio < 0.8) {
-        finalScore *= 0.5;
-        details.reasons.push("[EXTREME_TEXTURE]");
+    // Extreme scene noise penalty (busy background)
+    if (details.sceneNoise > 4500 && details.symmetryRatio < 0.75) {
+        finalScore *= 0.55;
+        details.reasons.push('[EXTREME_TEXTURE]');
     }
 
     details.score = Math.min(1, finalScore);
@@ -804,6 +841,8 @@ const styles = StyleSheet.create({
         borderRadius: Radii.full, borderWidth: 1, zIndex: 15,
     },
     statusBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+    statusBadgeHint: { fontSize: 9, fontWeight: '500', letterSpacing: 0.3, opacity: 0.85, marginTop: 1 },
+
     sideControls: {
         position: 'absolute', right: 14, top: '35%', gap: 12, zIndex: 10,
     },
