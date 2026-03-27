@@ -213,18 +213,41 @@ export default function ShootScreen() {
         guidesVisible, setGuidesVisible,
         setCapturedPhotoUri,
         wheelbaseScale, setWheelbaseScale,
+        featureWidthScale, setFeatureWidthScale,
         verticalOffset, setVerticalOffset,
     } = useAppState();
 
     const { roll, isLevel } = useDeviceLevel();
 
-    const featureWidthScale = 1.0; // Constant feature width as requested
+    // Measure the camera viewport so we can convert SVG-space anchor coords
+    // (0-1 of the 200×200 SVG square) into viewport-space fractions (0-1 of
+    // the actual View). The SVG is rendered at SW*0.75 and centered, so
+    // without this conversion markers are placed in completely the wrong spot.
+    const SVG_RENDER_SIZE = SW * 0.75; // must match size={SW * 0.75} on TemplateSVG
+    const [vpLayout, setVpLayout] = useState<{ width: number; height: number } | null>(null);
 
-    const anchors = selectedTemplate 
-        ? getAnchorsForTemplate(selectedTemplate.id, wheelbaseScale, featureWidthScale, verticalOffset) 
+    /** Convert one anchor from SVG-square space → viewport fraction space. */
+    const toVpAnchor = useCallback(
+        (a: { x: number; y: number }) => {
+            if (!vpLayout) return a;
+            const offX = (vpLayout.width  - SVG_RENDER_SIZE) / 2;
+            const offY = (vpLayout.height - SVG_RENDER_SIZE) / 2;
+            return {
+                x: (offX + a.x * SVG_RENDER_SIZE) / vpLayout.width,
+                y: (offY + a.y * SVG_RENDER_SIZE) / vpLayout.height,
+            };
+        },
+        [vpLayout, SVG_RENDER_SIZE]
+    );
+
+    // Raw SVG-space anchors (used to drive the SVG overlay).
+    const anchors = selectedTemplate
+        ? getAnchorsForTemplate(selectedTemplate.id, wheelbaseScale, featureWidthScale, verticalOffset)
         : [];
 
-
+    // Viewport-space anchors: correctly placed on screen and used for the
+    // alignment image analysis (camera frame ≈ viewport).
+    const vpAnchors = anchors.map(a => ({ ...a, ...toVpAnchor(a) }));
 
     // Request camera permission
     const requestCameraIfNeeded = useCallback(async () => {
@@ -325,7 +348,7 @@ export default function ShootScreen() {
             }
             const resized = await manipulateAsync(snap.uri, [{ crop }, { resize: { width: 400 } }], { format: SaveFormat.JPEG });
 
-            const result = await analyzeAlignmentByCrops(resized.uri, resized.width, resized.height, anchors);
+            const result = await analyzeAlignmentByCrops(resized.uri, resized.width, resized.height, vpAnchors);
             setAlignScore(result.score);
 
             console.log("─── ALIGNMENT CHECK ───");
@@ -396,7 +419,13 @@ export default function ShootScreen() {
             </View>
 
             {/* Camera Viewport */}
-            <View style={styles.viewport}>
+            <View
+                style={styles.viewport}
+                onLayout={(e) => setVpLayout({
+                    width:  e.nativeEvent.layout.width,
+                    height: e.nativeEvent.layout.height,
+                })}
+            >
                 {permission?.granted ? (
                     <CameraView
                         ref={cameraRef}
@@ -432,10 +461,10 @@ export default function ShootScreen() {
                     </View>
                 )}
 
-                {/* Fixed reference markers */}
-                {selectedTemplate && guidesVisible && anchors.length > 0 && (
+                {/* Fixed reference markers — positioned in viewport space */}
+                {selectedTemplate && guidesVisible && vpAnchors.length > 0 && (
                     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                        {anchors.map((anchor, i) => (
+                        {vpAnchors.map((anchor) => (
                             <ReferenceMarker
                                 key={anchor.id}
                                 label={anchor.label}
@@ -525,7 +554,7 @@ export default function ShootScreen() {
                 {selectedTemplate && (
                     <View style={styles.alignmentSliders}>
                         {/* Wheelbase (if applicable) */}
-                        {(selectedTemplate.id === 'car-side' || selectedTemplate.id === 'car-diagonal') && (
+                        {(selectedTemplate.id === 'car-side' || selectedTemplate.id === 'car-diagonal-left' || selectedTemplate.id === 'car-diagonal-right') && (
                             <View style={styles.sliderSection}>
                                 <View style={styles.sliderHeader}>
                                     <View style={styles.sliderLabelRow}>
@@ -540,6 +569,26 @@ export default function ShootScreen() {
                                     value={wheelbaseScale} min={0.5} max={1.5}
                                     disabled={overlayLocked}
                                     onValueChange={setWheelbaseScale}
+                                />
+                            </View>
+                        )}
+
+                        {/* Feature spacing — mirror ↔ steering wheel (interior front only) */}
+                        {(selectedTemplate.id === 'interior-front-left' || selectedTemplate.id === 'interior-front-center' || selectedTemplate.id === 'interior-front-right') && (
+                            <View style={styles.sliderSection}>
+                                <View style={styles.sliderHeader}>
+                                    <View style={styles.sliderLabelRow}>
+                                        <MaterialCommunityIcons name="arrow-up-down" size={14} color={Colors.primary} />
+                                        <Text style={styles.sliderLabel}>MIRROR TO WHEEL DIST</Text>
+                                    </View>
+                                    <View style={styles.sliderValueBadge}>
+                                        <Text style={styles.sliderValueText}>{Math.round(featureWidthScale * 100)}%</Text>
+                                    </View>
+                                </View>
+                                <DragSlider
+                                    value={featureWidthScale} min={0.5} max={1.5}
+                                    disabled={overlayLocked}
+                                    onValueChange={setFeatureWidthScale}
                                 />
                             </View>
                         )}
@@ -723,23 +772,20 @@ async function analyzeAlignmentByCrops(
         const threshold = profile[type] ?? 800;
 
         const ratioNoise = c / (details.sceneNoise || 1);
-        const ratioBody  = c / (details.bodyNoise  || 1);
 
-        // Anchors must be meaningfully more complex than both the background
-        // noise and the car body. No symmetry bypass — symmetric textures
-        // (floors, walls, grass) would falsely trigger it.
-        let reqRatio = 1.6;
-        if (c > 4000) reqRatio = 1.3; // Very high-complexity patches get slight leniency
+        // Anchor patch just needs to be more detailed than the scene background.
+        // reqRatio of 1.2 is lenient: gentle lighting, darker cars, etc. still pass.
+        const reqRatio = 1.2;
 
-        // Also require absolute minimum complexity (55% of feature-specific threshold)
-        const absMinimum = threshold * 0.55;
+        // Absolute floor: patch must have at least 30% of the feature-type threshold.
+        const absMinimum = threshold * 0.30;
 
-        const pass = (c > absMinimum) && (ratioNoise >= reqRatio) && (ratioBody >= reqRatio);
+        const pass = (c > absMinimum) && (ratioNoise >= reqRatio);
 
         details.anchorDetails.push({
             complexity: c,
             threshold,
-            ratio: Math.min(ratioNoise, ratioBody),
+            ratio: ratioNoise,
             reqRatio,
             pass
         });
@@ -749,7 +795,6 @@ async function analyzeAlignmentByCrops(
         } else {
             if (c <= absMinimum)          details.reasons.push(`[LOW_DETAIL_${i}]`);
             else if (ratioNoise < reqRatio) details.reasons.push(`[LOW_BG_RATIO_${i}]`);
-            else if (ratioBody  < reqRatio) details.reasons.push(`[LOW_BODY_RATIO_${i}]`);
         }
     }
 

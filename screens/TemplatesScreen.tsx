@@ -13,8 +13,8 @@ import { CAR_TEMPLATES, TemplateSVG } from '../components/CarSVGs';
 import { RootStackParamList } from '../App';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
-type Category = 'All' | 'Exterior';
-const CATEGORIES: Category[] = ['All', 'Exterior'];
+type Category = 'All' | 'Exterior' | 'Interior';
+const CATEGORIES: Category[] = ['All', 'Exterior', 'Interior'];
 const { width: SW } = Dimensions.get('window');
 const CARD_SIZE = (SW - 48) / 2;
 
