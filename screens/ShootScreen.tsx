@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity,
-    Dimensions, Alert, Platform, PanResponder, Animated,
+    Dimensions, Alert, Platform, Animated,
 } from 'react-native';
 import { CameraView, CameraType, FlashMode, useCameraPermissions } from 'expo-camera';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,203 +17,16 @@ import { useAppState } from '../context/AppContext';
 import { TemplateSVG, getAnchorsForTemplate } from '../components/CarSVGs';
 import { RootStackParamList } from '../App';
 import { useDeviceLevel } from '../hooks/useDeviceLevel';
+import { DragSlider } from '../components/DragSlider';
+import {
+    AlignState, stateColor,
+    ReferenceMarker, LevelIndicator, AnalyzingPill, StatusBadge,
+} from '../components/CameraOverlays';
+import { analyzeAlignmentByCrops } from '../utils/alignmentAnalysis';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-const { width: SW, height: SH } = Dimensions.get('window');
-
-/* ── Alignment result state ── */
-type AlignState = 'idle' | 'ready' | 'scanning' | 'approved' | 'rejected';
-
-/* ── State → Color mapping ── */
-function stateColor(state: AlignState): string {
-    switch (state) {
-        case 'ready': return '#EAB308';    // yellow
-        case 'scanning': return '#3B82F6'; // blue
-        case 'approved': return '#22C55E'; // green
-        case 'rejected': return '#EF4444'; // red
-        default: return 'rgba(255,255,255,0.7)'; // idle
-    }
-}
-
-/* ─── Fixed Reference Marker ─────────────────────────────── */
-function ReferenceMarker({ label, x, y, state }: {
-    label: string; x: number; y: number; state: AlignState; 
-}) {
-    const color = stateColor(state);
-
-    return (
-        <View
-            style={[
-                styles.refMarker,
-                {
-                    left: `${x * 100}%`,
-                    top: `${y * 100}%`,
-                    borderColor: color,
-                    backgroundColor: state === 'approved'
-                        ? 'rgba(34,197,94,0.15)'
-                        : state === 'rejected'
-                            ? 'rgba(239,68,68,0.15)'
-                            : state === 'ready'
-                                ? 'rgba(234,179,8,0.15)'
-                                : 'rgba(255,255,255,0.06)',
-                },
-            ]}
-            pointerEvents="none"
-        >
-            <View style={[styles.refCross, { backgroundColor: color }]} />
-            <View style={[styles.refCrossV, { backgroundColor: color }]} />
-            <Text style={[styles.refLabel, { color }]} numberOfLines={1}>{label}</Text>
-        </View>
-    );
-}
-
-/* ─── Level Indicator ───────────────────────────────────────── */
-function LevelIndicator({ roll, isLevel }: { roll: number; isLevel: boolean }) {
-    const barColor = isLevel ? '#EAB308' : Colors.danger;
-    const clampedRoll = Math.max(-15, Math.min(15, roll));
-    const dotOffset = (clampedRoll / 15) * 45;
-
-    return (
-        <View style={styles.levelWrap}>
-            <View style={styles.levelBar}>
-                <View style={styles.levelCenter} />
-                <View style={[
-                    styles.levelDot,
-                    {
-                        backgroundColor: barColor,
-                        transform: [{ translateX: dotOffset }],
-                    },
-                ]} />
-            </View>
-            <Text style={[styles.levelText, { color: barColor }]}>
-                {isLevel ? 'LEVEL ✓' : `${roll.toFixed(1)}°`}
-            </Text>
-        </View>
-    );
-}
-
-/* ─── Analyzing Pill ────────────────────────────────────── */
-function AnalyzingPill() {
-    const pulse = useRef(new Animated.Value(1)).current;
-    useEffect(() => {
-        Animated.loop(
-            Animated.sequence([
-                Animated.timing(pulse, { toValue: 0.55, duration: 600, useNativeDriver: true }),
-                Animated.timing(pulse, { toValue: 1,    duration: 600, useNativeDriver: true }),
-            ])
-        ).start();
-        return () => { pulse.stopAnimation(); };
-    }, []);
-
-    return (
-        <View style={styles.analyzingOverlay} pointerEvents="none">
-            <Animated.View style={[styles.analyzingPill, { opacity: pulse }]}>
-                <View style={styles.analyzingDot} />
-                <Text style={styles.analyzingText}>ANALYZING · KEEP STILL</Text>
-            </Animated.View>
-        </View>
-    );
-}
-
-/* ─── Status Badge ───────────────────────────────────────── */
-function StatusBadge({ state, score, hint }: { state: AlignState; score: number; hint?: string }) {
-    const color = stateColor(state);
-    const pct = Math.round(score * 100);
-
-    const configs: Record<AlignState, { icon: string; text: string }> = {
-        idle:     { icon: 'phone-rotate-landscape', text: 'LEVEL YOUR PHONE' },
-        ready:    { icon: 'camera',                 text: 'HOLD STEADY…' },
-        scanning: { icon: 'magnify-scan',           text: 'SCANNING…' },
-        approved: { icon: 'check-circle',           text: `ALIGNED ${pct}% · READY` },
-        rejected: { icon: 'close-circle',           text: 'MISALIGNED · RETAKE' },
-    };
-
-    const { icon, text } = configs[state];
-
-    return (
-        <View style={[
-            styles.statusBadge,
-            {
-                backgroundColor: `${color}18`,
-                borderColor: `${color}55`,
-            },
-        ]}>
-            <MaterialCommunityIcons name={icon as any} size={14} color={color} />
-            <View>
-                <Text style={[styles.statusBadgeText, { color }]}>{text}</Text>
-                {hint ? (
-                    <Text style={[styles.statusBadgeHint, { color }]}>{hint}</Text>
-                ) : null}
-            </View>
-        </View>
-    );
-}
-
-/* ─── Draggable Slider ───────────────────────────────────── */
-function DragSlider({
-    value, onValueChange, min, max, disabled, fillColor, thumbColor, trackWidth,
-}: {
-    value: number;
-    onValueChange: (v: number) => void;
-    min: number;
-    max: number;
-    disabled?: boolean;
-    fillColor?: string;
-    thumbColor?: string;
-    trackWidth?: number;
-}) {
-    const tw = trackWidth ?? SW - 40;
-    // When locked, fall back to a muted gray regardless of the intended color.
-    const lockedColor = 'rgba(255,255,255,0.2)';
-    const fColor = disabled ? lockedColor : (fillColor ?? Colors.primary);
-    const tColor = disabled ? 'rgba(255,255,255,0.35)' : (thumbColor ?? Colors.primary);
-    const range = max - min;
-
-    // Keep refs to latest props so the PanResponder closure is never stale.
-    const valueRef = useRef(value);
-    const onValueChangeRef = useRef(onValueChange);
-    const disabledRef = useRef(disabled);
-    useEffect(() => { valueRef.current = value; }, [value]);
-    useEffect(() => { onValueChangeRef.current = onValueChange; }, [onValueChange]);
-    useEffect(() => { disabledRef.current = disabled; }, [disabled]);
-
-    // Value at the moment the user touches down — delta is computed from here.
-    const startValue = useRef(value);
-
-    const panResponder = useRef(
-        PanResponder.create({
-            onStartShouldSetPanResponder: () => true,
-            onMoveShouldSetPanResponder: () => true,
-            // On touch-down: just snapshot the current value. Do NOT jump to
-            // locationX — locationX can be relative to a child view (fill/thumb)
-            // and would cause the slider to snap to 0 or to the wrong position.
-            onPanResponderGrant: () => {
-                if (disabledRef.current) return;
-                startValue.current = valueRef.current;
-            },
-            // On drag: compute new value from how far the finger has moved
-            // relative to the touch-down point. gestureState.dx is always the
-            // cumulative delta from the original touch, so it's rock-stable.
-            onPanResponderMove: (_e, gestureState) => {
-                if (disabledRef.current) return;
-                const delta = (gestureState.dx / tw) * range;
-                const raw = startValue.current + delta;
-                onValueChangeRef.current(parseFloat(Math.max(min, Math.min(max, raw)).toFixed(2)));
-            },
-        })
-    ).current;
-
-    const pct = ((value - min) / range) * 100;
-
-    return (
-        <View style={styles.sliderTrack} {...panResponder.panHandlers}>
-            <View style={[styles.sliderFill, { width: `${pct}%`, backgroundColor: fColor }]} />
-            <View style={[styles.sliderThumb, { left: `${pct}%`, backgroundColor: tColor }]} />
-        </View>
-    );
-}
-
+const { width: SW } = Dimensions.get('window');
 
 /* ═══ Main Screen ═══════════════════════════════════════════ */
 export default function ShootScreen() {
@@ -254,7 +67,7 @@ export default function ShootScreen() {
     const toVpAnchor = useCallback(
         (a: { x: number; y: number }) => {
             if (!vpLayout) return a;
-            const offX = (vpLayout.width  - SVG_RENDER_SIZE) / 2;
+            const offX = (vpLayout.width - SVG_RENDER_SIZE) / 2;
             const offY = (vpLayout.height - SVG_RENDER_SIZE) / 2;
             return {
                 x: (offX + a.x * SVG_RENDER_SIZE) / vpLayout.width,
@@ -295,15 +108,9 @@ export default function ShootScreen() {
         if (alignState === 'scanning' || alignState === 'approved' || alignState === 'rejected') return;
 
         if (isLevel) {
-            // Phone level → show ready state
-            if (alignState === 'idle') {
-                setAlignState('ready');
-            }
+            if (alignState === 'idle') setAlignState('ready');
         } else {
-            // Phone not level → reset to idle
-            if (alignState === 'ready') {
-                setAlignState('idle');
-            }
+            if (alignState === 'ready') setAlignState('idle');
         }
     }, [isLevel, selectedTemplate, alignState]);
 
@@ -319,9 +126,9 @@ export default function ShootScreen() {
 
     /** Translate raw reason codes into one actionable user-facing hint. */
     function reasonToHint(reasons: string[]): string {
-        if (reasons.includes('[ASYMMETRIC]'))        return 'Center the car in frame';
-        if (reasons.includes('[EXTREME_TEXTURE]'))   return 'Background too busy — find a cleaner spot';
-        if (reasons.some(r => r.startsWith('[LOW_DETAIL_')))   return 'Car feature not visible — get closer';
+        if (reasons.includes('[ASYMMETRIC]')) return 'Center the car in frame';
+        if (reasons.includes('[EXTREME_TEXTURE]')) return 'Background too busy — find a cleaner spot';
+        if (reasons.some(r => r.startsWith('[LOW_DETAIL_'))) return 'Car feature not visible — get closer';
         if (reasons.some(r => r.startsWith('[LOW_BG_RATIO_'))) return 'Background too similar to car';
         if (reasons.some(r => r.startsWith('[LOW_BODY_RATIO_'))) return 'Car features unclear — try better lighting';
         return 'Reposition and try again';
@@ -377,7 +184,7 @@ export default function ShootScreen() {
             const result = await analyzeAlignmentByCrops(resized.uri, resized.width, resized.height, vpAnchors);
             setAlignScore(result.score);
 
-            console.log("─── ALIGNMENT CHECK ───");
+            console.log('─── ALIGNMENT CHECK ───');
             console.log(`Score: ${Math.round(result.score * 100)}%`);
             console.log(`Scene Noise: ${Math.round(result.sceneNoise)}`);
             console.log(`Body Noise: ${Math.round(result.bodyNoise)}`);
@@ -385,9 +192,9 @@ export default function ShootScreen() {
             result.anchorDetails.forEach((a, i) => {
                 console.log(`Anchor ${i}: C=${a.complexity}, R=${a.ratio.toFixed(2)} (Req=${a.reqRatio}) - ${a.pass ? 'PASS' : 'FAIL'}`);
             });
-            if (result.reasons.length > 0) console.log(`Reasons: ${result.reasons.join(", ")}`);
+            if (result.reasons.length > 0) console.log(`Reasons: ${result.reasons.join(', ')}`);
             if (result.error) console.log(`Error: ${result.error}`);
-            console.log("──────────────────────");
+            console.log('──────────────────────');
 
             if (result.score > 0.80) {
                 // 2a. Passed → take HQ photo immediately and navigate
@@ -451,7 +258,7 @@ export default function ShootScreen() {
             <View
                 style={styles.viewport}
                 onLayout={(e) => setVpLayout({
-                    width:  e.nativeEvent.layout.width,
+                    width: e.nativeEvent.layout.width,
                     height: e.nativeEvent.layout.height,
                 })}
             >
@@ -473,14 +280,9 @@ export default function ShootScreen() {
                     </View>
                 )}
 
-
-
                 {/* Onion skin overlay */}
                 {selectedTemplate && (
-                    <View
-                        style={[styles.overlayWrap, { opacity: overlayOpacity }]}
-                        pointerEvents="none"
-                    >
+                    <View style={[styles.overlayWrap, { opacity: overlayOpacity }]} pointerEvents="none">
                         <TemplateSVG
                             templateId={selectedTemplate.id}
                             size={SW * 0.75}
@@ -679,7 +481,6 @@ export default function ShootScreen() {
                         ]} />
                     </TouchableOpacity>
 
-
                     <TouchableOpacity
                         style={styles.ratioBtn}
                         onPress={() => navigation.navigate('Templates')}
@@ -695,161 +496,6 @@ export default function ShootScreen() {
     );
 }
 
-/* ── Crop-based alignment analysis ───────────────────────── */
-/**
- * For each anchor point, crop a small patch from the image and measure
- * its JPEG base64 length. JPEG compression produces longer strings for
- * visually complex regions (edges, features) and shorter strings for
- * uniform areas (sky, plain surfaces).
- *
- * Scoring:
- * 1. Each anchor patch is scored by its base64 length vs expected thresholds
- * 2. Patches that are too uniform (short base64) score low → feature missing
- * 3. We also check variance between patches → uniform scenes score lower
- */
-async function analyzeAlignmentByCrops(
-    imageUri: string,
-    width: number,
-    height: number,
-    anchors: { x: number; y: number; type: string }[],
-): Promise<{ 
-    score: number; 
-    sceneNoise: number; 
-    bodyNoise: number;
-    anchorDetails: {
-        complexity: number;
-        threshold: number;
-        ratio: number;
-        reqRatio: number;
-        pass: boolean;
-    }[];
-    symmetryRatio: number;
-    reasons: string[];
-    error?: string;
-}> {
-    const details = {
-        score: 0,
-        sceneNoise: 0,
-        bodyNoise: 0,
-        anchorDetails: [] as any[],
-        symmetryRatio: 1,
-        reasons: [] as string[],
-        error: undefined as string | undefined
-    };
-
-    if (anchors.length === 0) return details;
-
-    const patchSize = 50;
-    const complexities: number[] = [];
-
-    // 1. Establish Baselines (Noise & Body)
-    try {
-        // A. Triplet Noise (Sky/Background)
-        const pL = await manipulateAsync(imageUri, [{ crop: { originX: 20, originY: 20, width: 50, height: 50 } }], { base64: true, format: SaveFormat.JPEG });
-        const pC = await manipulateAsync(imageUri, [{ crop: { originX: Math.floor(width/2)-25, originY: 20, width: 50, height: 50 } }], { base64: true, format: SaveFormat.JPEG });
-        const pR = await manipulateAsync(imageUri, [{ crop: { originX: width - 70, originY: 20, width: 50, height: 50 } }], { base64: true, format: SaveFormat.JPEG });
-        
-        // B. Body Complexity (Center of car panel)
-        const pB = await manipulateAsync(imageUri, [{ crop: { originX: Math.floor(width/2)-25, originY: Math.floor(height/2)-25, width: 50, height: 50 } }], { base64: true, format: SaveFormat.JPEG });
-
-        const nL = pL.base64?.length ?? 200;
-        const nC = pC.base64?.length ?? 200;
-        const nR = pR.base64?.length ?? 200;
-        details.sceneNoise = (nL + nC + nR) / 3;
-        details.bodyNoise = pB.base64?.length ?? 200;
-
-        if (!pL.base64 || !pB.base64) details.error = "NO_BASE64";
-    } catch (e: any) {
-        details.sceneNoise = 400;
-        details.bodyNoise = 400;
-        details.error = `BASE_ERR: ${e.message}`;
-    }
-
-    // 2. Sample Anchors
-    const profile: Record<string, number> = {
-        light: 800,   
-        wheel: 1000,  
-        mirror: 600,
-        edge: 500,
-    };
-
-    for (const anchor of anchors) {
-        const cx = Math.floor(anchor.x * width);
-        const cy = Math.floor(anchor.y * height);
-        const originX = Math.max(0, Math.min(width - patchSize, cx - patchSize / 2));
-        const originY = Math.max(0, Math.min(height - patchSize, cy - patchSize / 2));
-        try {
-            const patch = await manipulateAsync(
-                imageUri,
-                [{ crop: { originX, originY, width: patchSize, height: patchSize } }],
-                { base64: true, format: SaveFormat.JPEG }
-            );
-            complexities.push(patch.base64?.length ?? 0);
-        } catch (e: any) {
-            complexities.push(0);
-            if (!details.error) details.error = `CROP_ERR: ${e.message}`;
-        }
-    }
-
-    // 3. Calculated Symmetry Baseline
-    if (complexities.length >= 2) {
-        const c1 = complexities[0] || 1;
-        const c2 = complexities[1] || 1;
-        details.symmetryRatio = Math.min(c1, c2) / Math.max(c1, c2);
-    }
-
-    // 4. Robust Scoring
-    let totalScore = 0;
-    for (let i = 0; i < complexities.length; i++) {
-        const c = complexities[i];
-        const type = anchors[i]?.type || 'edge';
-        const threshold = profile[type] ?? 800;
-
-        const ratioNoise = c / (details.sceneNoise || 1);
-
-        // Anchor patch just needs to be more detailed than the scene background.
-        // reqRatio of 1.2 is lenient: gentle lighting, darker cars, etc. still pass.
-        const reqRatio = 1.2;
-
-        // Absolute floor: patch must have at least 30% of the feature-type threshold.
-        const absMinimum = threshold * 0.30;
-
-        const pass = (c > absMinimum) && (ratioNoise >= reqRatio);
-
-        details.anchorDetails.push({
-            complexity: c,
-            threshold,
-            ratio: ratioNoise,
-            reqRatio,
-            pass
-        });
-
-        if (pass) {
-            totalScore += Math.min(1, c / threshold);
-        } else {
-            if (c <= absMinimum)          details.reasons.push(`[LOW_DETAIL_${i}]`);
-            else if (ratioNoise < reqRatio) details.reasons.push(`[LOW_BG_RATIO_${i}]`);
-        }
-    }
-
-    let finalScore = totalScore / (anchors.length || 1);
-
-    // Asymmetry penalty: anchors look nothing alike → framing is off-centre
-    if (details.symmetryRatio < 0.6) {
-        finalScore *= details.symmetryRatio;
-        details.reasons.push('[ASYMMETRIC]');
-    }
-
-    // Extreme scene noise penalty (busy background)
-    if (details.sceneNoise > 4500 && details.symmetryRatio < 0.75) {
-        finalScore *= 0.55;
-        details.reasons.push('[EXTREME_TEXTURE]');
-    }
-
-    details.score = Math.min(1, finalScore);
-    return details;
-}
-
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: Colors.bgDark },
     header: {
@@ -861,10 +507,7 @@ const styles = StyleSheet.create({
     headerCenter: { alignItems: 'center' },
     headerTitle: { fontSize: Typography.base, fontWeight: '700', color: Colors.textPrimary },
     headerSub: { fontSize: 10, fontWeight: '700', color: Colors.primary, letterSpacing: 1.5 },
-    headerBtn: { width: 42, alignItems: 'flex-end' },
-    viewport: {
-        flex: 1, backgroundColor: '#000', overflow: 'hidden', position: 'relative',
-    },
+    viewport: { flex: 1, backgroundColor: '#000', overflow: 'hidden', position: 'relative' },
     noCameraWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
     noCameraText: { color: Colors.textMuted, fontSize: Typography.sm },
     permBtn: {
@@ -873,81 +516,11 @@ const styles = StyleSheet.create({
         paddingVertical: 10, borderRadius: Radii.full,
     },
     permBtnText: { color: Colors.primary, fontWeight: '600', fontSize: Typography.sm },
-
-    refLabel: {
-        position: 'absolute', top: 36, fontSize: 9, fontWeight: '700',
-        backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 4, borderRadius: 2,
-    },
-    scanBtn: {
-        position: 'absolute', bottom: 30, alignSelf: 'center',
-        backgroundColor: '#EAB308', flexDirection: 'row', alignItems: 'center',
-        gap: 10, paddingHorizontal: 24, paddingVertical: 14,
-        borderRadius: Radii.full, zIndex: 100, elevation: 5,
-        shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3, shadowRadius: 4,
-    },
-    scanBtnText: { color: '#000', fontWeight: '900', fontSize: 13, letterSpacing: 0.5 },
     overlayWrap: {
         position: 'absolute', inset: 0, alignItems: 'center',
         justifyContent: 'center', zIndex: 3,
     },
-    refMarker: {
-        position: 'absolute', width: 32, height: 32,
-        marginLeft: -16, marginTop: -16, borderRadius: 16,
-        borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', zIndex: 12,
-    },
-    refCross: { position: 'absolute', width: 14, height: 1.5, borderRadius: 1 },
-    refCrossV: { position: 'absolute', width: 1.5, height: 14, borderRadius: 1 },
-    levelWrap: {
-        position: 'absolute', top: 10, alignSelf: 'center',
-        alignItems: 'center', zIndex: 15,
-    },
-    levelBar: {
-        width: 100, height: 6, borderRadius: 3,
-        backgroundColor: 'rgba(255,255,255,0.12)',
-        alignItems: 'center', justifyContent: 'center',
-    },
-    levelCenter: {
-        position: 'absolute', width: 2, height: 10,
-        backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: 1,
-    },
-    levelDot: { width: 10, height: 10, borderRadius: 5 },
-    levelText: { fontSize: 8, fontWeight: '700', letterSpacing: 1, marginTop: 3 },
-    statusBadge: {
-        position: 'absolute', bottom: 14, alignSelf: 'center',
-        flexDirection: 'row', alignItems: 'center', gap: 5,
-        paddingHorizontal: 14, paddingVertical: 6,
-        borderRadius: Radii.full, borderWidth: 1, zIndex: 15,
-    },
-    statusBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 1 },
-    statusBadgeHint: { fontSize: 9, fontWeight: '500', letterSpacing: 0.3, opacity: 0.85, marginTop: 1 },
-
-    analyzingOverlay: {
-        position: 'absolute', inset: 0,
-        alignItems: 'center', justifyContent: 'center',
-        zIndex: 20,
-    },
-    analyzingPill: {
-        flexDirection: 'row', alignItems: 'center', gap: 8,
-        backgroundColor: 'rgba(15,20,30,0.82)',
-        borderWidth: 1, borderColor: 'rgba(59,130,246,0.55)',
-        paddingHorizontal: 20, paddingVertical: 10,
-        borderRadius: Radii.full,
-        shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.6, shadowRadius: 12, elevation: 8,
-    },
-    analyzingDot: {
-        width: 8, height: 8, borderRadius: 4,
-        backgroundColor: '#3B82F6',
-    },
-    analyzingText: {
-        fontSize: 12, fontWeight: '800', letterSpacing: 1.5,
-        color: '#93C5FD',
-    },
-
-    sideControls: {
-        position: 'absolute', right: 14, top: '35%', gap: 12, zIndex: 10,
-    },
+    sideControls: { position: 'absolute', right: 14, top: '35%', gap: 12, zIndex: 10 },
     sideBtn: {
         width: 48, height: 48, borderRadius: Radii.full,
         backgroundColor: 'rgba(23,31,42,0.7)', borderWidth: 1,
@@ -979,22 +552,7 @@ const styles = StyleSheet.create({
         paddingVertical: 2, borderRadius: Radii.full, minWidth: 52, alignItems: 'center',
     },
     sliderValueText: { fontSize: Typography.xs, fontWeight: '700', color: Colors.primary },
-    sliderTrack: {
-        height: 6, backgroundColor: 'rgba(255,255,255,0.1)',
-        borderRadius: Radii.full, overflow: 'visible', position: 'relative',
-        justifyContent: 'center'
-    },
-    sliderFill: {
-        height: 6, backgroundColor: Colors.primary,
-        borderRadius: Radii.full,
-    },
-    sliderThumb: {
-        position: 'absolute', width: 20, height: 20,
-        borderRadius: 10, backgroundColor: Colors.primary,
-        marginLeft: -10, // Center the thumb over the actual value point
-        elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3, shadowRadius: 2,
-    },shutterRow: {
+    shutterRow: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 4,
     },
     galleryThumb: {
