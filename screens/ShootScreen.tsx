@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity,
-    Dimensions, Alert, Platform, PanResponder,
+    Dimensions, Alert, Platform, PanResponder, Animated,
 } from 'react-native';
-import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
+import { CameraView, CameraType, FlashMode, useCameraPermissions } from 'expo-camera';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -89,6 +89,29 @@ function LevelIndicator({ roll, isLevel }: { roll: number; isLevel: boolean }) {
             <Text style={[styles.levelText, { color: barColor }]}>
                 {isLevel ? 'LEVEL ✓' : `${roll.toFixed(1)}°`}
             </Text>
+        </View>
+    );
+}
+
+/* ─── Analyzing Pill ────────────────────────────────────── */
+function AnalyzingPill() {
+    const pulse = useRef(new Animated.Value(1)).current;
+    useEffect(() => {
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(pulse, { toValue: 0.55, duration: 600, useNativeDriver: true }),
+                Animated.timing(pulse, { toValue: 1,    duration: 600, useNativeDriver: true }),
+            ])
+        ).start();
+        return () => { pulse.stopAnimation(); };
+    }, []);
+
+    return (
+        <View style={styles.analyzingOverlay} pointerEvents="none">
+            <Animated.View style={[styles.analyzingPill, { opacity: pulse }]}>
+                <View style={styles.analyzingDot} />
+                <Text style={styles.analyzingText}>ANALYZING · KEEP STILL</Text>
+            </Animated.View>
         </View>
     );
 }
@@ -203,6 +226,7 @@ export default function ShootScreen() {
     const [alignState, setAlignState] = useState<AlignState>('idle');
     const [alignScore, setAlignScore] = useState(0);
     const [rejectionHint, setRejectionHint] = useState<string | undefined>(undefined);
+    const [cameraFlash, setCameraFlash] = useState<FlashMode>('off');
     const levelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -323,6 +347,8 @@ export default function ShootScreen() {
             }
 
             // 1. Run alignment check on a fast low-quality snapshot
+            //    Force flash OFF so the white screen doesn't confuse/startle the user
+            setCameraFlash('off');
             setAlignState('scanning');
 
             const snap = await cameraRef.current.takePictureAsync({ quality: 0.3 });
@@ -368,7 +394,10 @@ export default function ShootScreen() {
                 setAlignState('approved');
                 await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
+                // Restore flash to auto for the real shot
+                setCameraFlash('auto');
                 const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
+                setCameraFlash('off');
                 if (!photo?.uri) {
                     Alert.alert('Camera Error', 'Alignment passed but photo capture failed. Please try again.');
                     setAlignState('idle');
@@ -431,6 +460,8 @@ export default function ShootScreen() {
                         ref={cameraRef}
                         style={StyleSheet.absoluteFill}
                         facing={facing}
+                        flash={cameraFlash}
+                        animateShutter={false}
                     />
                 ) : (
                     <View style={styles.noCameraWrap}>
@@ -490,6 +521,9 @@ export default function ShootScreen() {
 
                 {/* Level indicator */}
                 <LevelIndicator roll={roll} isLevel={isLevel} />
+
+                {/* Analyzing pill — shown while scanning */}
+                {alignState === 'scanning' && <AnalyzingPill />}
 
                 {/* Status badge — shown on idle (level prompt) and rejected (hint) */}
                 {selectedTemplate && (alignState === 'idle' || alignState === 'rejected') && (
@@ -887,6 +921,29 @@ const styles = StyleSheet.create({
     },
     statusBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 1 },
     statusBadgeHint: { fontSize: 9, fontWeight: '500', letterSpacing: 0.3, opacity: 0.85, marginTop: 1 },
+
+    analyzingOverlay: {
+        position: 'absolute', inset: 0,
+        alignItems: 'center', justifyContent: 'center',
+        zIndex: 20,
+    },
+    analyzingPill: {
+        flexDirection: 'row', alignItems: 'center', gap: 8,
+        backgroundColor: 'rgba(15,20,30,0.82)',
+        borderWidth: 1, borderColor: 'rgba(59,130,246,0.55)',
+        paddingHorizontal: 20, paddingVertical: 10,
+        borderRadius: Radii.full,
+        shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.6, shadowRadius: 12, elevation: 8,
+    },
+    analyzingDot: {
+        width: 8, height: 8, borderRadius: 4,
+        backgroundColor: '#3B82F6',
+    },
+    analyzingText: {
+        fontSize: 12, fontWeight: '800', letterSpacing: 1.5,
+        color: '#93C5FD',
+    },
 
     sideControls: {
         position: 'absolute', right: 14, top: '35%', gap: 12, zIndex: 10,
