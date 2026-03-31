@@ -16,12 +16,14 @@ import ValidateScreen from './screens/ValidateScreen';
 import ProjectsScreen from './screens/ProjectsScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import LobbyScreen from './screens/LobbyScreen';
+import AnchorDevModeScreen from './screens/AnchorDevModeScreen';
 
 export type RootStackParamList = {
   Lobby: undefined;
   Main: undefined;
   Templates: undefined;
   Validate: undefined;
+  AnchorDevMode: undefined;
 };
 
 export type MainTabParamList = {
@@ -126,6 +128,11 @@ export default function App() {
               name="Validate"
               component={ValidateScreen}
               options={{ animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
+              name="AnchorDevMode"
+              component={AnchorDevModeScreen}
+              options={{ animation: 'slide_from_bottom', presentation: 'modal' }}
             />
           </Stack.Navigator>
         </NavigationContainer>

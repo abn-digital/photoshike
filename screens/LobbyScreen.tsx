@@ -1,13 +1,16 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, TouchableOpacity, Dimensions } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors, Radii, Typography } from '../constants/theme';
 import { RootStackParamList } from '../App';
 
 type Props = { navigation: NativeStackNavigationProp<RootStackParamList, 'Lobby'> };
 
+
 export default function LobbyScreen({ navigation }: Props) {
+    const devNav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
     const glowAnim = useRef(new Animated.Value(0)).current;
     const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -41,6 +44,19 @@ export default function LobbyScreen({ navigation }: Props) {
                     <Text style={styles.btnText}>Get Started</Text>
                 </TouchableOpacity>
             </Animated.View>
+            {/* DEV MODE entry — DISABLED after 2026-03-30 calibration session.
+                To re-enable: uncomment the block below and set __DEV__ guard if needed.
+                See screens/AnchorDevModeScreen.tsx for full instructions. */}
+            {/* {__DEV__ && (
+                <TouchableOpacity
+                    style={styles.devBtn}
+                    onPress={() => devNav.navigate('AnchorDevMode')}
+                    activeOpacity={0.7}
+                >
+                    <MaterialCommunityIcons name="wrench" size={11} color="#FCD34D" />
+                    <Text style={styles.devBtnText}>DEV: Anchor Editor</Text>
+                </TouchableOpacity>
+            )} */}
         </View>
     );
 }
@@ -104,5 +120,24 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: Typography.md,
         fontWeight: '700',
+    },
+    devBtn: {
+        position: 'absolute',
+        bottom: 28,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        backgroundColor: 'rgba(252,211,77,0.10)',
+        borderWidth: 1,
+        borderColor: 'rgba(252,211,77,0.3)',
+        paddingHorizontal: 14,
+        paddingVertical: 6,
+        borderRadius: Radii.full,
+    },
+    devBtnText: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#FCD34D',
+        letterSpacing: 0.5,
     },
 });

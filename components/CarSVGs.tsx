@@ -50,10 +50,10 @@ export const CAR_TEMPLATES = [
         ratio: '4:3',
         category: 'Exterior' as const,
         anchors: [
-            { id: 'dl-front-wheel', label: 'Front Wheel', x: 0.255, y: 0.69, type: 'wheel' },
-            { id: 'dl-rear-wheel', label: 'Rear Wheel', x: 0.745, y: 0.69, type: 'wheel' },
-            // x=0.355 = (frontWheelCx+20)/200 at scale=1; tracks front wheel horizontally
-            { id: 'dl-headlight', label: 'Headlight', x: 0.355, y: 0.49, type: 'light' },
+            // Mirrored from car-diagonal-right (2026-03-30): x = 1 − x_right, y unchanged
+            { id: 'dl-front-wheel', label: 'Front Wheel', x: 0.5899, y: 0.6935, type: 'wheel' },
+            { id: 'dl-rear-wheel',  label: 'Rear Wheel',  x: 0.8121, y: 0.5078, type: 'wheel' },
+            { id: 'dl-headlight',   label: 'Headlight',   x: 0.4216, y: 0.6048, type: 'light' },
         ] as AnchorPoint[],
     },
     {
@@ -62,10 +62,10 @@ export const CAR_TEMPLATES = [
         ratio: '4:3',
         category: 'Exterior' as const,
         anchors: [
-            { id: 'dr-front-wheel', label: 'Front Wheel', x: 0.745, y: 0.69, type: 'wheel' },
-            { id: 'dr-rear-wheel', label: 'Rear Wheel', x: 0.255, y: 0.69, type: 'wheel' },
-            // x=0.645 = (frontWheelCx-20)/200 at scale=1; tracks front wheel horizontally
-            { id: 'dr-headlight', label: 'Headlight', x: 0.645, y: 0.49, type: 'light' },
+            // Calibrated 2026-03-30 via AnchorDevModeScreen live session (master for diagonal pair)
+            { id: 'dr-front-wheel', label: 'Front Wheel', x: 0.4101, y: 0.6935, type: 'wheel' },
+            { id: 'dr-rear-wheel',  label: 'Rear Wheel',  x: 0.1879, y: 0.5078, type: 'wheel' },
+            { id: 'dr-headlight',   label: 'Headlight',   x: 0.5784, y: 0.6048, type: 'light' },
         ] as AnchorPoint[],
     },
     // ── Interior ────────────────────────────────────────────────
@@ -75,8 +75,9 @@ export const CAR_TEMPLATES = [
         ratio: '4:3',
         category: 'Interior' as const,
         anchors: [
-            { id: 'ifl-steering', label: 'Steering Wheel', x: 0.35, y: 0.58, type: 'steering' },
-            { id: 'ifl-mirror', label: 'Rear-View Mirror', x: 0.52, y: 0.28, type: 'mirror' },
+            // Calibrated 2026-03-30 via AnchorDevModeScreen live session
+            { id: 'ifl-steering', label: 'Steering Wheel', x: 0.3593, y: 0.6096, type: 'steering' },
+            { id: 'ifl-mirror',   label: 'Rear-View Mirror', x: 0.5663, y: 0.3036, type: 'mirror' },
         ] as AnchorPoint[],
     },
     {
@@ -85,8 +86,9 @@ export const CAR_TEMPLATES = [
         ratio: '4:3',
         category: 'Interior' as const,
         anchors: [
-            { id: 'ifc-steering', label: 'Steering Wheel', x: 0.36, y: 0.60, type: 'steering' },
-            { id: 'ifc-mirror', label: 'Rear-View Mirror', x: 0.50, y: 0.27, type: 'mirror' },
+            // Calibrated 2026-03-30 via AnchorDevModeScreen live session
+            { id: 'ifc-steering', label: 'Steering Wheel', x: 0.2684, y: 0.5486, type: 'steering' },
+            { id: 'ifc-mirror',   label: 'Rear-View Mirror', x: 0.5005, y: 0.3284, type: 'mirror' },
         ] as AnchorPoint[],
     },
     {
@@ -95,8 +97,9 @@ export const CAR_TEMPLATES = [
         ratio: '4:3',
         category: 'Interior' as const,
         anchors: [
-            { id: 'ifr-steering', label: 'Steering Wheel', x: 0.65, y: 0.58, type: 'steering' },
-            { id: 'ifr-mirror', label: 'Rear-View Mirror', x: 0.48, y: 0.28, type: 'mirror' },
+            // Calibrated 2026-03-30 via AnchorDevModeScreen live session
+            { id: 'ifr-steering', label: 'Steering Wheel', x: 0.3766, y: 0.4933, type: 'steering' },
+            { id: 'ifr-mirror',   label: 'Rear-View Mirror', x: 0.4855, y: 0.3286, type: 'mirror' },
         ] as AnchorPoint[],
     },
     {
@@ -105,8 +108,9 @@ export const CAR_TEMPLATES = [
         ratio: '4:3',
         category: 'Interior' as const,
         anchors: [
-            { id: 'irl-headrest-l', label: 'Left Headrest', x: 0.30, y: 0.38, type: 'headrest' },
-            { id: 'irl-headrest-r', label: 'Right Headrest', x: 0.62, y: 0.35, type: 'headrest' },
+            // Calibrated 2026-03-30 via AnchorDevModeScreen live session
+            { id: 'irl-headrest-l', label: 'Left Headrest',  x: 0.3000, y: 0.3800, type: 'headrest' },
+            { id: 'irl-headrest-r', label: 'Right Headrest', x: 0.6774, y: 0.4250, type: 'headrest' },
         ] as AnchorPoint[],
     },
     {
@@ -115,8 +119,9 @@ export const CAR_TEMPLATES = [
         ratio: '4:3',
         category: 'Interior' as const,
         anchors: [
-            { id: 'irr-headrest-l', label: 'Left Headrest', x: 0.38, y: 0.35, type: 'headrest' },
-            { id: 'irr-headrest-r', label: 'Right Headrest', x: 0.70, y: 0.38, type: 'headrest' },
+            // Calibrated 2026-03-30 via AnchorDevModeScreen live session
+            { id: 'irr-headrest-l', label: 'Left Headrest',  x: 0.3535, y: 0.4436, type: 'headrest' },
+            { id: 'irr-headrest-r', label: 'Right Headrest', x: 0.6491, y: 0.4218, type: 'headrest' },
         ] as AnchorPoint[],
     },
 ];
@@ -231,23 +236,35 @@ export function RearViewSVG({
 
 export function DiagonalSVG({ 
     size = 200, opacity = 1, color, 
-    wheelbaseScale = 1.0, featureWidthScale = 1.0, verticalOffset = 0.0 
+    wheelbaseScale = 1.0, verticalOffset = 0.0 
 }: SvgProps) {
     const s = color ?? STROKE;
-    const centerX = 100;
-    const fWheelDist = 49 * wheelbaseScale; 
-    const rWheelDist = 49 * wheelbaseScale;
-    // Headlight sits just right of the front (left) wheel, tracks with wheelbaseScale.
-    // lightX center = frontWheelCx + 20 → at scale=1: 51+20=71 → anchor x=0.355
-    const lightX = (centerX - fWheelDist) + 20;
+    // Calibrated 2026-03-30 (mirrored from diagonal-right master).
+    // Wheel pair mid: x=140, y=120. Near wheel lower-left of mid, far wheel upper-right.
+    const midX = 140;
+    const midY = 120;
+    const hSpan = 22 * wheelbaseScale;
+    const vSpan = 19 * wheelbaseScale;
+    const fWheelX = midX - hSpan;   // at scale=1: 118
+    const fWheelY = midY + vSpan;   // at scale=1: 139
+    const rWheelX = midX + hSpan;   // at scale=1: 162
+    const rWheelY = midY - vSpan;   // at scale=1: 101
+    // Headlight is left of front wheel (front faces left)
+    const lightX  = fWheelX - 34;   // at scale=1: 84
+    const lightY  = fWheelY - 18;   // at scale=1: 121 centre → rect top ~114
     const yOff = verticalOffset * 200;
 
     return (
         <Svg width={size} height={size} viewBox="0 0 200 200" fill="none">
-            <Path d="M30 130 L30 105 Q32 85 55 72 L80 58 Q100 52 145 56 Q162 62 178 105 L178 130" stroke={s} strokeWidth="2.5" fill="none" opacity={opacity * 0.6} transform={`translate(0, ${yOff})`} />
-            <Circle cx={centerX - fWheelDist} cy={138 + yOff} r="16" stroke={s} strokeWidth="3" fill="none" opacity={opacity} />
-            <Circle cx={centerX + rWheelDist} cy={138 + yOff} r="12" stroke={s} strokeWidth="2.5" fill="none" opacity={opacity * 0.85} />
-            <Rect x={lightX - 15} y={90 + yOff} width="30" height="15" rx="4" stroke={s} strokeWidth="2.5" fill="none" opacity={opacity} />
+            {/* body — front left, rear upper-right */}
+            <Path d="M18 152 L18 118 Q24 88 55 74 Q85 62 130 64 Q158 66 174 84 L180 112 Q180 138 168 152"
+                stroke={s} strokeWidth="2.5" fill="none" opacity={opacity * 0.6} transform={`translate(0, ${yOff})`} />
+            {/* near front wheel — larger */}
+            <Circle cx={fWheelX} cy={fWheelY + yOff} r="16" stroke={s} strokeWidth="3" fill="none" opacity={opacity} />
+            {/* far rear wheel — smaller, higher */}
+            <Circle cx={rWheelX} cy={rWheelY + yOff} r="12" stroke={s} strokeWidth="2.5" fill="none" opacity={opacity * 0.85} />
+            {/* headlight */}
+            <Rect x={lightX - 15} y={lightY - 7 + yOff} width="30" height="15" rx="4" stroke={s} strokeWidth="2.5" fill="none" opacity={opacity} />
         </Svg>
     );
 }
@@ -255,24 +272,35 @@ export function DiagonalSVG({
 /** Horizontally mirrored diagonal — front faces right (right-3/4 shot). */
 export function DiagonalFlippedSVG({ 
     size = 200, opacity = 1, color, 
-    wheelbaseScale = 1.0, featureWidthScale = 1.0, verticalOffset = 0.0 
+    wheelbaseScale = 1.0, verticalOffset = 0.0 
 }: SvgProps) {
     const s = color ?? STROKE;
-    const centerX = 100;
-    const fWheelDist = 49 * wheelbaseScale;
-    const rWheelDist = 49 * wheelbaseScale;
-    // Headlight sits just left of the front (right) wheel, tracks with wheelbaseScale.
-    // lightX center = frontWheelCx - 20 → at scale=1: 149-20=129 → anchor x=0.645
-    const lightX = (centerX + fWheelDist) - 20;
+    // Calibrated 2026-03-30 (live session master for diagonal pair).
+    // Wheel pair mid: x=60, y=120. Near wheel lower-right of mid, far wheel upper-left.
+    const midX = 60;
+    const midY = 120;
+    const hSpan = 22 * wheelbaseScale;
+    const vSpan = 19 * wheelbaseScale;
+    const fWheelX = midX + hSpan;   // at scale=1: 82
+    const fWheelY = midY + vSpan;   // at scale=1: 139
+    const rWheelX = midX - hSpan;   // at scale=1: 38
+    const rWheelY = midY - vSpan;   // at scale=1: 101
+    // Headlight is right of front wheel (front faces right)
+    const lightX  = fWheelX + 34;   // at scale=1: 116
+    const lightY  = fWheelY - 18;   // at scale=1: 121 centre → rect top ~114
     const yOff = verticalOffset * 200;
 
     return (
         <Svg width={size} height={size} viewBox="0 0 200 200" fill="none">
-            {/* body path — mirrored horizontally around x=100 */}
-            <Path d="M170 130 L170 105 Q168 85 145 72 L120 58 Q100 52 55 56 Q38 62 22 105 L22 130" stroke={s} strokeWidth="2.5" fill="none" opacity={opacity * 0.6} transform={`translate(0, ${yOff})`} />
-            <Circle cx={centerX + fWheelDist} cy={138 + yOff} r="16" stroke={s} strokeWidth="3" fill="none" opacity={opacity} />
-            <Circle cx={centerX - rWheelDist} cy={138 + yOff} r="12" stroke={s} strokeWidth="2.5" fill="none" opacity={opacity * 0.85} />
-            <Rect x={lightX - 15} y={90 + yOff} width="30" height="15" rx="4" stroke={s} strokeWidth="2.5" fill="none" opacity={opacity} />
+            {/* body — mirror of DiagonalSVG: front right, rear upper-left */}
+            <Path d="M182 152 L182 118 Q176 88 145 74 Q115 62 70 64 Q42 66 26 84 L20 112 Q20 138 32 152"
+                stroke={s} strokeWidth="2.5" fill="none" opacity={opacity * 0.6} transform={`translate(0, ${yOff})`} />
+            {/* near front wheel — larger */}
+            <Circle cx={fWheelX} cy={fWheelY + yOff} r="16" stroke={s} strokeWidth="3" fill="none" opacity={opacity} />
+            {/* far rear wheel — smaller, higher */}
+            <Circle cx={rWheelX} cy={rWheelY + yOff} r="12" stroke={s} strokeWidth="2.5" fill="none" opacity={opacity * 0.85} />
+            {/* headlight */}
+            <Rect x={lightX - 15} y={lightY - 7 + yOff} width="30" height="15" rx="4" stroke={s} strokeWidth="2.5" fill="none" opacity={opacity} />
         </Svg>
     );
 }
@@ -319,18 +347,18 @@ function InteriorFrontSVG({
 }
 
 export function InteriorFrontLeftSVG(props: SvgProps) {
-    // Camera left: steering right of mid-frame, mirror left of mid-frame.
-    return <InteriorFrontSVG {...props} steerBase={70} mirrorBase={104} />;
+    // Calibrated 2026-03-30: steer (72, 122), mirror (113, 61)
+    return <InteriorFrontSVG {...props} steerBase={72} mirrorBase={113} steerYBase={122} mirrorYBase={61} />;
 }
 
 export function InteriorFrontCenterSVG(props: SvgProps) {
-    // Camera centred: steering left of centre, mirror centred.
-    return <InteriorFrontSVG {...props} steerBase={75} mirrorBase={100} />;
+    // Calibrated 2026-03-30: steer (54, 110), mirror (100, 66)
+    return <InteriorFrontSVG {...props} steerBase={54} mirrorBase={100} steerYBase={110} mirrorYBase={66} />;
 }
 
 export function InteriorFrontRightSVG(props: SvgProps) {
-    // Camera right: steering further left, mirror right of mid-frame.
-    return <InteriorFrontSVG {...props} steerBase={130} mirrorBase={96} />;
+    // Calibrated 2026-03-30: steer (75, 99), mirror (97, 66)
+    return <InteriorFrontSVG {...props} steerBase={75} mirrorBase={97} steerYBase={99} mirrorYBase={66} />;
 }
 
 /** Rear interior view — two front-seat headrests visible, offset for left/right angle. */
@@ -345,14 +373,14 @@ export function InteriorRearLeftSVG({ size = 200, opacity = 1, color, verticalOf
             {/* left seat back (closer, larger) */}
             <Rect x={28} y={100 + yOff} width={64} height={55} rx={8}
                 stroke={s} strokeWidth="2.5" fill="none" opacity={opacity * 0.6} />
-            {/* left headrest */}
-            <Rect x={44} y={80 + yOff} width={32} height={22} rx={6}
+            {/* left headrest — calibrated 2026-03-30: centre (60, 76) */}
+            <Rect x={44} y={65 + yOff} width={32} height={22} rx={6}
                 stroke={s} strokeWidth="3" fill="none" opacity={opacity} />
             {/* right seat back (farther, smaller) */}
-            <Rect x={108} y={108 + yOff} width={58} height={48} rx={8}
+            <Rect x={108} y={100 + yOff} width={58} height={48} rx={8}
                 stroke={s} strokeWidth="2.5" fill="none" opacity={opacity * 0.55} />
-            {/* right headrest */}
-            <Rect x={122} y={90 + yOff} width={28} height={20} rx={6}
+            {/* right headrest — calibrated 2026-03-30: centre (136, 85) */}
+            <Rect x={122} y={75 + yOff} width={28} height={20} rx={6}
                 stroke={s} strokeWidth="3" fill="none" opacity={opacity} />
         </Svg>
     );
@@ -369,14 +397,14 @@ export function InteriorRearRightSVG({ size = 200, opacity = 1, color, verticalO
             {/* left seat back (farther, smaller) */}
             <Rect x={30} y={108 + yOff} width={58} height={48} rx={8}
                 stroke={s} strokeWidth="2.5" fill="none" opacity={opacity * 0.55} />
-            {/* left headrest */}
-            <Rect x={44} y={90 + yOff} width={28} height={20} rx={6}
+            {/* left headrest — calibrated 2026-03-30: centre (71, 89) */}
+            <Rect x={57} y={79 + yOff} width={28} height={20} rx={6}
                 stroke={s} strokeWidth="3" fill="none" opacity={opacity} />
             {/* right seat back (closer, larger) */}
-            <Rect x={108} y={100 + yOff} width={64} height={55} rx={8}
+            <Rect x={100} y={100 + yOff} width={64} height={55} rx={8}
                 stroke={s} strokeWidth="2.5" fill="none" opacity={opacity * 0.6} />
-            {/* right headrest */}
-            <Rect x={122} y={80 + yOff} width={32} height={22} rx={6}
+            {/* right headrest — calibrated 2026-03-30: centre (130, 84) */}
+            <Rect x={114} y={73 + yOff} width={32} height={22} rx={6}
                 stroke={s} strokeWidth="3" fill="none" opacity={opacity} />
         </Svg>
     );
